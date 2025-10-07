@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import Image from 'next/image'
 
 type Trip = {
     id: string
@@ -13,6 +14,7 @@ type Trip = {
     status: string
     type: string
     notes: string
+    image_url?: string | null
     companion_requests: { id: string; status: string; user_id: string }[]
   }
 
@@ -20,6 +22,7 @@ export default function TripCard({ trip, userId }: { trip: Trip; userId: string 
   const [requesting, setRequesting] = useState(false)
   const [message, setMessage] = useState('')
   const [showRequestForm, setShowRequestForm] = useState(false)
+  const [autoImageUrl, setAutoImageUrl] = useState<string | null>(null)
   const supabase = createClient()
 
   // Calculate available spots
@@ -120,14 +123,47 @@ const userHasPendingRequest = trip.companion_requests.some(r =>
 
   const statusBadge = getStatusBadge()
 
+  // Auto-fetch image if none stored
+  useEffect(() => {
+    if (trip.image_url) return
+    const controller = new AbortController()
+    const fetchImage = async () => {
+      try {
+        const res = await fetch(`/api/images/search?q=${encodeURIComponent(trip.location)}`, {
+          signal: controller.signal,
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        if (data?.imageUrl) setAutoImageUrl(data.imageUrl as string)
+      } catch (_e) {
+        // ignore
+      }
+    }
+    fetchImage()
+    return () => controller.abort()
+  }, [trip.image_url, trip.location])
+
   return (
     <div className={`bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-shadow ${
       actualStatus === 'cancelled' ? 'opacity-60' : ''
     }`}>
-      {/* Header with gradient */}
-      <div className="h-32 bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center">
-        <span className="text-5xl">✈️</span>
-      </div>
+      {/* Header image or fallback gradient */}
+      { (trip.image_url || autoImageUrl) ? (
+        <div className="relative h-48">
+          <Image
+            src={(trip.image_url || autoImageUrl) as string}
+            alt={trip.title}
+            fill
+            className="object-cover"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            priority={false}
+          />
+        </div>
+      ) : (
+        <div className="h-32 bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center">
+          <span className="text-5xl">✈️</span>
+        </div>
+      )}
 
       {/* Content */}
       <div className="p-6">
