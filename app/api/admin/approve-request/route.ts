@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { resend, FROM_EMAIL } from '@/lib/resend';
 
 export async function POST(request: Request) {
   try {
@@ -73,7 +74,22 @@ export async function POST(request: Request) {
       .select('email')
       .eq('id', requestData.user_id)
       .single()
+      
+      if (userProfile?.email) {
+        await resend.emails.send({
+          from: FROM_EMAIL,
+          to: userProfile.email,
+          subject: `You’re accepted for: ${trip?.title || 'your trip'}`,
+          html: `
+            <div>
+              <p><strong>You are accepted for the trip!</strong></p>
+              <p>We will be contacting you with next steps.</p>
+            </div>
+          `,
+        }).catch((e) => console.error('Resend error (approve):', e));
+      }
 
+    
     console.log('=== REQUEST APPROVED ===')
     console.log(`User: ${userProfile?.email}`)
     console.log(`Trip: ${trip?.title}`)
